@@ -1,5 +1,6 @@
 #pragma once
 
+#include <errno.h>
 #include <stdio.h>
 
 #include "fb.h"
@@ -7,6 +8,61 @@
 
 #define RFB_VERSION_MSG_LEN 12
 #define RFB_PACKED __attribute__((__packed__))
+
+#define RFB_TRY_READ_IMPL(vnc_fd, dest, size, flags) \
+	do { \
+		size_t total_bytes_read = 0; \
+		while (total_bytes_read < (size)) { \
+			ssize_t bytes_read = recv((vnc_fd), ((u8 *)(dest)) + total_bytes_read, \
+						  (size)-total_bytes_read, flags); \
+			if (bytes_read < 0) { \
+				if (errno == EINTR) { \
+					continue; \
+				} \
+				if (errno == EAGAIN || errno == EWOULDBLOCK) { \
+					return VNC_RFB_RESULT_ERROR_IO_RECV_TIMEOUT; \
+				} \
+				return VNC_RFB_RESULT_ERROR_IO; \
+			} \
+			total_bytes_read += bytes_read; \
+		} \
+	} while (0);
+
+#define RFB_TRY_READ(vnc_fd, dest, size) RFB_TRY_READ_IMPL(vnc_fd, dest, size, 0)
+#define RFB_TRY_PEEK(vnc_fd, dest, size) RFB_TRY_READ_IMPL(vnc_fd, dest, size, MSG_PEEK)
+
+#define RFB_TRY_WRITE(vnc_fd, buf, size) \
+	do { \
+		size_t total_bytes_written = 0; \
+		while (total_bytes_written < (size)) { \
+			ssize_t bytes_written = write((vnc_fd), \
+						      ((u8 *)(buf)) + total_bytes_written, \
+						      (size)-total_bytes_written); \
+			if (bytes_written < 0) { \
+				return VNC_RFB_RESULT_ERROR_IO; \
+			} \
+			total_bytes_written += bytes_written; \
+		} \
+	} while (0);
+
+#define RFB_TRY_DISCARD(vnc_fd, size) \
+	do { \
+		size_t to_discard = size; \
+		while (to_discard > 0) { \
+			char discard_buf[8192]; \
+			ssize_t bytes_read = read(vnc_fd, discard_buf, to_discard); \
+			if (bytes_read < 0) { \
+				if (errno == EINTR) { \
+					continue; \
+				} \
+				if (errno == EAGAIN || errno == EWOULDBLOCK) { \
+					return VNC_RFB_RESULT_ERROR_IO_RECV_TIMEOUT; \
+				} \
+				return VNC_RFB_RESULT_ERROR_IO; \
+			} \
+			to_discard -= bytes_read; \
+		} \
+	} while (0);
 
 struct Vnc_fb_mngr;
 
@@ -37,21 +93,27 @@ enum Vnc_rfb_encoding {
 	VNC_RFB_ENCODING_CONTINUOUS_UPDATES_PSEUDO = -313,
 };
 
-enum Vnc_rfb_message_type {
-	VNC_RFB_MESSAGE_TYPE_FRAMEBUFFER_UPDATE = 0,
-	VNC_RFB_MESSAGE_TYPE_SET_ENCODING = 2,
-	VNC_RFB_MESSAGE_TYPE_FRAMEBUFFER_UPDATE_REQUEST = 3,
-	VNC_RFB_MESSAGE_TYPE_POINTER_EVENT = 5,
-	VNC_RFB_MESSAGE_TYPE_CONTINUOUS_UPDATES = 150,
-	VNC_RFB_MESSAGE_TYPE_SERVER_FENCE = 248,
-	VNC_RFB_MESSAGE_TYPE_SET_DESKTOP_SIZE = 251,
+enum Vnc_rfb_server_message_type {
+	VNC_RFB_SERVER_MESSAGE_TYPE_FRAMEBUFFER_UPDATE = 0,
+	VNC_RFB_SERVER_MESSAGE_TYPE_CUT_TEXT = 3,
+	VNC_RFB_SERVER_MESSAGE_TYPE_END_OF_CONTINUOUS_UPDATES = 150,
+	VNC_RFB_SERVER_MESSAGE_TYPE_FENCE = 248,
+};
+
+enum Vnc_rfb_client_message_type {
+	VNC_RFB_CLIENT_MESSAGE_TYPE_SET_ENCODING = 2,
+	VNC_RFB_CLIENT_MESSAGE_TYPE_FRAMEBUFFER_UPDATE_REQUEST = 3,
+	VNC_RFB_CLIENT_MESSAGE_TYPE_KEY_EVENT = 4,
+	VNC_RFB_CLIENT_MESSAGE_TYPE_POINTER_EVENT = 5,
+	VNC_RFB_CLIENT_MESSAGE_TYPE_CONTINUOUS_UPDATES = 150,
+	VNC_RFB_CLIENT_MESSAGE_TYPE_FENCE = 248,
+	VNC_RFB_CLIENT_MESSAGE_TYPE_SET_DESKTOP_SIZE = 251,
 };
 
 enum Vnc_rfb_result {
 	VNC_RFB_RESULT_SUCCESS = 0,
-	VNC_RFB_RESULT_ERROR_IO_SHORT_READ = -1,
+	VNC_RFB_RESULT_ERROR_IO = -1,
 	VNC_RFB_RESULT_ERROR_IO_RECV_TIMEOUT = -2,
-	VNC_RFB_RESULT_ERROR_IO_SHORT_WRITE = -3,
 	VNC_RFB_RESULT_ERROR_NO_ACCEPTABLE_SECURITY = -4,
 	VNC_RFB_RESULT_ERROR_SERVER_SECURITY = -5,
 	VNC_RFB_RESULT_ERROR_SERVER_INIT_NAME_TOO_LONG = -6,
@@ -106,6 +168,13 @@ struct Vnc_rfb_enable_continuous_updates {
 	u16 height;
 } RFB_PACKED;
 
+struct Vnc_rfb_key_event {
+	u8 message_type;
+	u8 down;
+	u16 padding;
+	u32 key;
+} RFB_PACKED;
+
 struct Vnc_rfb_pointer_event {
 	u8 message_type;
 	u8 button_mask;
@@ -130,6 +199,12 @@ struct Vnc_rfb_set_desktop_size {
 	u8 number_of_screens;
 	u8 padding2;
 	struct Vnc_rfb_screen screens[1];
+} RFB_PACKED;
+
+struct Vnc_rfb_cut_text {
+	u8 message_type;
+	u8 padding[3];
+	u32 length;
 } RFB_PACKED;
 
 struct Vnc_rfb_framebuffer_update_action {
@@ -169,11 +244,14 @@ enum Vnc_rfb_result vnc_rfb_recv_rect_raw(int vnc_fd, struct Vnc_rfb_rect *rect,
 
 enum Vnc_rfb_result vnc_rfb_send_pointer_event(int vnc_id,
 					       struct Vnc_rfb_pointer_event *pointer_event);
+enum Vnc_rfb_result vnc_rfb_send_key_event(int vnc_id, struct Vnc_rfb_key_event *key_event);
 
 enum Vnc_rfb_result
 vnc_rfb_send_set_desktop_size(int vnc_id, struct Vnc_rfb_set_desktop_size *set_desktop_size);
 enum Vnc_rfb_result vnc_rfb_recv_number_of_screens(int vnc_fd, u8 *number_of_screens);
 enum Vnc_rfb_result vnc_rfb_recv_screens(int vnc_fd, struct Vnc_rfb_screen *screen,
 					 u8 screen_count);
+
+enum Vnc_rfb_result vnc_rfb_recv_cut_text(int vnc_fd, struct Vnc_rfb_cut_text *cut_text);
 
 const char *vnc_rfb_result_to_str(enum Vnc_rfb_result result);

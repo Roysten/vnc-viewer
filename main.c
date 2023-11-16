@@ -150,15 +150,26 @@ int main(int argc, char **argv)
 				vnc_session_send_pointer_event(&vnc_session, &input_state);
 			} else {
 				// We need to toggle the scroll up/down button
-				input_state.button_mask &= 0x7; // Make sure the scroll buttons are not enabled
+				// Make sure the scroll buttons are not enabled
+				input_state.button_mask &= 0x7;
 				for (size_t i = 0; i < input_state.wheel_scrolls; ++i) {
-					vnc_input_state_pointer_toggle_wheel_scroll_button_mask(&input_state);
+					vnc_input_state_pointer_toggle_wheel_scroll_button_mask(
+						&input_state);
 					vnc_session_send_pointer_event(&vnc_session, &input_state);
-					vnc_input_state_pointer_toggle_wheel_scroll_button_mask(&input_state);
+					vnc_input_state_pointer_toggle_wheel_scroll_button_mask(
+						&input_state);
 					vnc_session_send_pointer_event(&vnc_session, &input_state);
 				}
 				vnc_input_state_pointer_reset_wheel_scrolls(&input_state);
 			}
+		}
+
+		size_t key_event_count;
+		struct Vnc_input_state_key_event *key_events =
+			vnc_input_state_pop_keyboard_key_events(&input_state, &key_event_count);
+		for (size_t i = 0; i < key_event_count; ++i) {
+			struct Vnc_input_state_key_event *key_event = &key_events[i];
+			vnc_session_send_key_event(&vnc_session, key_event);
 		}
 
 		if ((events & VNC_EVENT_TYPE_EXIT) > 0) {

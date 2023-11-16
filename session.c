@@ -211,7 +211,7 @@ bool vnc_session_exchange_connection_params(struct Vnc_session *session, bool sh
 	if (session->server_settings.width != screen_width ||
 	    session->server_settings.height != screen_height) {
 		struct Vnc_rfb_set_desktop_size set_desktop_size = {
-			.message_type = VNC_RFB_MESSAGE_TYPE_SET_DESKTOP_SIZE,
+			.message_type = VNC_RFB_CLIENT_MESSAGE_TYPE_SET_DESKTOP_SIZE,
 			.width = htons(screen_width),
 			.height = htons(screen_height),
 			.number_of_screens = 1,
@@ -249,10 +249,10 @@ bool vnc_session_handle_message(struct Vnc_session *session)
 	}
 
 	vnc_log_debug("got message type %d", message_type);
-	switch ((enum Vnc_rfb_message_type)message_type) {
-	case VNC_RFB_MESSAGE_TYPE_SERVER_FENCE:
+	switch ((enum Vnc_rfb_server_message_type)message_type) {
+	case VNC_RFB_SERVER_MESSAGE_TYPE_FENCE:
 		return handle_fence(session);
-	case VNC_RFB_MESSAGE_TYPE_CONTINUOUS_UPDATES: {
+	case VNC_RFB_SERVER_MESSAGE_TYPE_END_OF_CONTINUOUS_UPDATES: {
 		vnc_log_debug("recvd end of continuous updates");
 		session->server_supports_continuous_updates = true;
 		session->continuous_updates_enabled = false;
@@ -261,8 +261,16 @@ bool vnc_session_handle_message(struct Vnc_session *session)
 		u8 message_type;
 		read(session->fd, &message_type, sizeof(message_type));
 	} break;
-	case VNC_RFB_MESSAGE_TYPE_FRAMEBUFFER_UPDATE: {
+	case VNC_RFB_SERVER_MESSAGE_TYPE_FRAMEBUFFER_UPDATE:
 		vnc_rfb_recv_framebuffer_update(session->fd, &session->fbu_actions);
+		break;
+	case VNC_RFB_SERVER_MESSAGE_TYPE_CUT_TEXT: {
+		struct Vnc_rfb_cut_text cut_text;
+		enum Vnc_rfb_result result = vnc_rfb_recv_cut_text(session->fd, &cut_text);
+		if (result == VNC_RFB_RESULT_SUCCESS) {
+			size_t to_read = ntohl(cut_text.length);
+			RFB_TRY_DISCARD(session->fd, to_read);
+		}
 	} break;
 	default:
 		vnc_log_error("BUG: unhandled message type %u", message_type);
@@ -272,7 +280,7 @@ bool vnc_session_handle_message(struct Vnc_session *session)
 	if (!session->continuous_updates_enabled && session->server_supports_fence &&
 	    session->server_supports_continuous_updates) {
 		struct Vnc_rfb_enable_continuous_updates updates = {
-			.message_type = VNC_RFB_MESSAGE_TYPE_CONTINUOUS_UPDATES,
+			.message_type = VNC_RFB_CLIENT_MESSAGE_TYPE_CONTINUOUS_UPDATES,
 			.enable = true,
 			.x = htons(0),
 			.y = htons(0),
@@ -323,7 +331,7 @@ bool vnc_session_send_pointer_event(struct Vnc_session *session,
 				    struct Vnc_input_state *input_state)
 {
 	struct Vnc_rfb_pointer_event pointer_event = {
-		.message_type = VNC_RFB_MESSAGE_TYPE_POINTER_EVENT,
+		.message_type = VNC_RFB_CLIENT_MESSAGE_TYPE_POINTER_EVENT,
 		.button_mask = input_state->button_mask,
 		.xpos = htons((u16)input_state->pos.x),
 		.ypos = htons((u16)input_state->pos.y),
@@ -338,6 +346,18 @@ bool vnc_session_send_pointer_event(struct Vnc_session *session,
 		return false;
 	}
 	return true;
+}
+
+bool vnc_session_send_key_event(struct Vnc_session *session,
+				struct Vnc_input_state_key_event *key_event)
+{
+	struct Vnc_rfb_key_event rfb_key_event = {
+		.message_type = VNC_RFB_CLIENT_MESSAGE_TYPE_KEY_EVENT,
+		.down = key_event->pressed,
+		.key = htonl(key_event->keysym),
+	};
+	enum Vnc_rfb_result result = vnc_rfb_send_key_event(session->fd, &rfb_key_event);
+	return result == VNC_RFB_RESULT_SUCCESS;
 }
 
 static bool vnc_rfb_pointer_event_eq(struct Vnc_rfb_pointer_event *a,
@@ -450,7 +470,7 @@ static enum Vnc_rfb_result handle_rect(struct Vnc_rfb_framebuffer_update_action 
 		}
 
 		struct Vnc_rfb_enable_continuous_updates updates = {
-			.message_type = VNC_RFB_MESSAGE_TYPE_CONTINUOUS_UPDATES,
+			.message_type = VNC_RFB_CLIENT_MESSAGE_TYPE_CONTINUOUS_UPDATES,
 			.enable = true,
 			.x = htons(0),
 			.y = htons(0),

@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <arpa/inet.h>
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -11,42 +10,6 @@
 #include "fb_mngr.h"
 #include "log.h"
 #include "macros.h"
-
-#define RFB_TRY_READ_IMPL(vnc_fd, dest, size, flags) \
-	do { \
-		size_t total_bytes_read = 0; \
-		while (total_bytes_read < (size)) { \
-			ssize_t bytes_read = recv((vnc_fd), ((u8 *)(dest)) + total_bytes_read, \
-						  (size)-total_bytes_read, flags); \
-			if (bytes_read <= 0) { \
-				if (errno == EINTR) { \
-					continue; \
-				} \
-				if (errno == EAGAIN || errno == EWOULDBLOCK) { \
-					return VNC_RFB_RESULT_ERROR_IO_RECV_TIMEOUT; \
-				} \
-				return VNC_RFB_RESULT_ERROR_IO_SHORT_READ; \
-			} \
-			total_bytes_read += bytes_read; \
-		} \
-	} while (0);
-
-#define RFB_TRY_READ(vnc_fd, dest, size) RFB_TRY_READ_IMPL(vnc_fd, dest, size, 0)
-#define RFB_TRY_PEEK(vnc_fd, dest, size) RFB_TRY_READ_IMPL(vnc_fd, dest, size, MSG_PEEK)
-
-#define RFB_TRY_WRITE(vnc_fd, buf, size) \
-	do { \
-		size_t total_bytes_written = 0; \
-		while (total_bytes_written < (size)) { \
-			ssize_t bytes_written = write((vnc_fd), \
-						      ((u8 *)(buf)) + total_bytes_written, \
-						      (size)-total_bytes_written); \
-			if (bytes_written <= 0) { \
-				return VNC_RFB_RESULT_ERROR_IO_SHORT_WRITE; \
-			} \
-			total_bytes_written += bytes_written; \
-		} \
-	} while (0);
 
 enum Vnc_rfb_result vnc_rfb_recv_version(int vnc_fd, enum Vnc_rfb_version *version)
 {
@@ -193,7 +156,7 @@ enum Vnc_rfb_result vnc_rfb_send_encodings(int vnc_fd, enum Vnc_rfb_encoding *en
 		u8 padding;
 		u16 number_of_encodings;
 	} RFB_PACKED to_write = {
-		.message_type = (u8)VNC_RFB_MESSAGE_TYPE_SET_ENCODING,
+		.message_type = (u8)VNC_RFB_CLIENT_MESSAGE_TYPE_SET_ENCODING,
 		.number_of_encodings = htons(encoding_count),
 	};
 	memcpy(buf, &to_write, sizeof(to_write));
@@ -292,10 +255,10 @@ const char *vnc_rfb_result_to_str(enum Vnc_rfb_result result)
 	switch (result) {
 	case VNC_RFB_RESULT_SUCCESS:
 		return "success";
-	case VNC_RFB_RESULT_ERROR_IO_SHORT_READ:
-		return "short read";
-	case VNC_RFB_RESULT_ERROR_IO_SHORT_WRITE:
-		return "short write";
+	case VNC_RFB_RESULT_ERROR_IO:
+		return "io error";
+	case VNC_RFB_RESULT_ERROR_IO_RECV_TIMEOUT:
+		return "receive timeout";
 	case VNC_RFB_RESULT_ERROR_NO_ACCEPTABLE_SECURITY:
 		return "no acceptable security";
 	case VNC_RFB_RESULT_ERROR_SERVER_SECURITY:
@@ -305,6 +268,12 @@ const char *vnc_rfb_result_to_str(enum Vnc_rfb_result result)
 	default:
 		return "unknown";
 	}
+}
+
+enum Vnc_rfb_result vnc_rfb_send_key_event(int vnc_id, struct Vnc_rfb_key_event *key_event)
+{
+	RFB_TRY_WRITE(vnc_id, key_event, sizeof(*key_event));
+	return VNC_RFB_RESULT_SUCCESS;
 }
 
 enum Vnc_rfb_result vnc_rfb_send_pointer_event(int vnc_id,
@@ -347,5 +316,11 @@ enum Vnc_rfb_result vnc_rfb_recv_rect_raw(int vnc_fd, struct Vnc_rfb_rect *rect,
 		RFB_TRY_READ(vnc_fd, &dest[pitch * y + rect->x * (bpp / 8)],
 			     rect->width * (bpp / 8));
 	}
+	return VNC_RFB_RESULT_SUCCESS;
+}
+
+enum Vnc_rfb_result vnc_rfb_recv_cut_text(int vnc_fd, struct Vnc_rfb_cut_text *cut_text)
+{
+	RFB_TRY_READ(vnc_fd, cut_text, sizeof(*cut_text));
 	return VNC_RFB_RESULT_SUCCESS;
 }

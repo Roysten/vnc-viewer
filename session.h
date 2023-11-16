@@ -41,6 +41,8 @@ bool vnc_session_start_processing_continuous_updates(struct Vnc_session *session
 						     struct Vnc_fb_mngr *fb_mngr);
 bool vnc_session_send_pointer_event(struct Vnc_session *session,
 				    struct Vnc_input_state *input_state);
+bool vnc_session_send_key_event(struct Vnc_session *session,
+				struct Vnc_input_state_key_event *key_event);
 int vnc_session_get_event_fd(struct Vnc_session *session);
 u32 vnc_session_get_events(struct Vnc_session *session);
 bool vnc_session_handle_fence(struct Vnc_session *session);

@@ -14,12 +14,43 @@ static void move_pointer(struct Vnc_input_state *input_state, double dx, double 
 
 bool vnc_input_state_init(struct Vnc_input_state *input_state)
 {
+	struct xkb_context *xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+	if (xkb_context == NULL) {
+		vnc_log_error("xkb context is NULL");
+		return false;
+	}
+
+	struct xkb_rule_names names = {
+		.rules = NULL,
+		.model = "pc105",
+		.layout = "us",
+		.variant = "",
+		.options = "terminate:ctrl_alt_bksp",
+	};
+
+	struct xkb_keymap *xkb_keymap =
+		xkb_keymap_new_from_names(xkb_context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+	if (xkb_keymap == NULL) {
+		vnc_log_error("xkb keymap is NULL");
+		return false;
+	}
+
+	struct xkb_state *xkb_state = xkb_state_new(xkb_keymap);
+	if (xkb_state == NULL) {
+		vnc_log_error("xkb state is NULL");
+		return false;
+	}
+
 	*input_state = (struct Vnc_input_state) {
 		.callbacks = {
-		.pointer_move = vnc_input_state_pointer_move,
+			.pointer_move = vnc_input_state_pointer_move,
 			.pointer_button = vnc_input_state_pointer_button,
 			.pointer_wheel_scroll = vnc_input_state_pointer_wheel_scroll,
+			.keyboard_key = vnc_input_state_keyboard_key,
 		},
+		.xkb_context = xkb_context,
+		.xkb_keymap = xkb_keymap,
+		.xkb_state = xkb_state,
 	};
 	return true;
 }
@@ -51,7 +82,6 @@ void vnc_input_state_pointer_wheel_scroll(struct Vnc_input_action *action, doubl
 {
 	struct Vnc_input_state *input_state =
 		container_of(action, struct Vnc_input_state, callbacks);
-	(void)input_state;
 	input_state->wheel_scroll_direction = v120 > 0 ?
 						      VNC_INPUT_STATE_WHEEL_SCROLL_DIRECTION_UP :
 						      VNC_INPUT_STATE_WHEEL_SCROLL_DIRECTION_DOWN;
@@ -61,6 +91,23 @@ void vnc_input_state_pointer_wheel_scroll(struct Vnc_input_action *action, doubl
 		v120 -= 120.0;
 		input_state->wheel_scrolls += 1;
 	}
+}
+
+void vnc_input_state_keyboard_key(struct Vnc_input_action *action, u32 key, bool pressed)
+{
+	struct Vnc_input_state *input_state =
+		container_of(action, struct Vnc_input_state, callbacks);
+	key += 8;
+	xkb_keysym_t keysym = xkb_state_key_get_one_sym(input_state->xkb_state, key);
+	xkb_state_update_key(input_state->xkb_state, key, pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
+	if (input_state->key_event_count >= ARRAY_COUNT(input_state->key_events)) {
+		vnc_log_error("key events full, dropping event");
+		return;
+	}
+
+	input_state->key_events[input_state->key_event_count].keysym = keysym;
+	input_state->key_events[input_state->key_event_count].pressed = pressed;
+	input_state->key_event_count += 1;
 }
 
 void vnc_input_state_pointer_reset_wheel_scrolls(struct Vnc_input_state *input_state)
@@ -122,4 +169,14 @@ void vnc_input_state_desktop_size_update(struct Vnc_input_state *input_state, do
 	input_state->desktop_size.width = width;
 	input_state->desktop_size.height = height;
 	move_pointer(input_state, 0, 0);
+}
+
+struct Vnc_input_state_key_event *
+vnc_input_state_pop_keyboard_key_events(struct Vnc_input_state *input_state,
+					size_t *key_event_count)
+{
+	*key_event_count = input_state->key_event_count;
+	struct Vnc_input_state_key_event *events = input_state->key_events;
+	input_state->key_event_count = 0;
+	return events;
 }
