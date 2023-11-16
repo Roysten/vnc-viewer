@@ -257,9 +257,8 @@ bool vnc_session_handle_message(struct Vnc_session *session)
 		session->server_supports_continuous_updates = true;
 		session->continuous_updates_enabled = false;
 
-		// Make sure to pop the message_type byte
-		u8 message_type;
-		read(session->fd, &message_type, sizeof(message_type));
+		// Discard message type byte
+		RFB_TRY_DISCARD(session->fd, 1);
 	} break;
 	case VNC_RFB_SERVER_MESSAGE_TYPE_FRAMEBUFFER_UPDATE:
 		vnc_rfb_recv_framebuffer_update(session->fd, &session->fbu_actions);
@@ -272,6 +271,10 @@ bool vnc_session_handle_message(struct Vnc_session *session)
 			RFB_TRY_DISCARD(session->fd, to_read);
 		}
 	} break;
+	case VNC_RFB_SERVER_MESSAGE_TYPE_BELL:
+		// Discard message type byte
+		RFB_TRY_DISCARD(session->fd, 1);
+		break;
 	default:
 		vnc_log_error("BUG: unhandled message type %u", message_type);
 		assert(false);
