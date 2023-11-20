@@ -1,5 +1,5 @@
 CFLAGS = -std=c99 -Wall -Wextra -Wno-unused-parameter -ggdb -pthread -D_GNU_SOURCE
 DEPS = \$(pkg-config --cflags --libs libinput libudev libdrm libsystemd xkbcommon)
 : foreach rfb.c util.c d3des.c logind.c log.c input.c input_state.c drm.c event_loop.c session.c fb_mngr.c main.c |> gcc $(CFLAGS) $(DEPS) -c %f -o %o |> build/%B.o
-: build/*.o |> gcc $(CFLAGS) $(DEPS) %f -o %o |> build/vnc-client
+: build/*.o |> gcc $(CFLAGS) %f -o %o $(DEPS) |> build/vnc-client
 .gitignore
