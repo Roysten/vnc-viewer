@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <stdlib.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
@@ -60,6 +61,13 @@ bool vnc_session_connect(struct Vnc_session *session, const char *address, u16 p
 	}
 
 	rc = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+	if (rc != 0) {
+		vnc_log_error("setsockopt failed");
+		goto err;
+	}
+
+	int flag = 1;
+	rc = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
 	if (rc != 0) {
 		vnc_log_error("setsockopt failed");
 		goto err;
