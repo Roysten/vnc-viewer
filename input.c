@@ -117,6 +117,7 @@ bool vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_actio
 			break;
 		}
 		default:
+			break;
 		}
 
 		libinput_event_destroy(event);
