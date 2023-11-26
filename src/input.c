@@ -66,7 +66,7 @@ int vnc_input_get_fd(struct Vnc_input *input)
 	return libinput_get_fd(input->libinput);
 }
 
-bool vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_action *callbacks)
+void vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_action *callbacks)
 {
 	libinput_dispatch(vnc_input->libinput);
 	struct libinput_event *event;
