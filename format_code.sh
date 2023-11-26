@@ -1,4 +1,4 @@
 #!/bin/sh
 
-clang-format -i *.c *.h
+clang-format -i src/*.c src/*.h
 
