@@ -70,7 +70,6 @@ bool vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_actio
 {
 	libinput_dispatch(vnc_input->libinput);
 	struct libinput_event *event;
-	bool keyboard_event_seen = false;
 	while ((event = libinput_get_event(vnc_input->libinput)) != NULL) {
 		enum libinput_event_type event_type = libinput_event_get_type(event);
 		switch (event_type) {
@@ -123,5 +122,4 @@ bool vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_actio
 		libinput_event_destroy(event);
 		libinput_dispatch(vnc_input->libinput);
 	}
-	return keyboard_event_seen;
 }

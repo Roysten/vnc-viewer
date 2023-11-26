@@ -23,4 +23,4 @@ struct Vnc_input {
 bool vnc_input_init(struct Vnc_input *vnc_input, struct Vnc_logind *vnc_logind);
 void vnc_input_deinit(struct Vnc_input *vnc_input);
 int vnc_input_get_fd(struct Vnc_input *vnc_input);
-bool vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_action *callbacks);
+void vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_action *callbacks);

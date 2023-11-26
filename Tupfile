@@ -1,6 +1,6 @@
 LIBS = libinput libudev libdrm libsystemd xkbcommon
 CFLAGS = -std=c99 -Wall -Wextra -Wno-unused-parameter -ggdb -pthread -D_GNU_SOURCE \$(pkg-config --cflags $(LIBS))
 LDFLAGS = \$(pkg-config --libs $(LIBS))
-: foreach rfb.c util.c d3des.c logind.c log.c input.c input_state.c drm.c event_loop.c session.c fb_mngr.c main.c |> gcc $(CFLAGS) -c %f -o %o |> build/%B.o
-: build/*.o |> gcc %f -o %o $(LDFLAGS) |> build/vnc-client
+: foreach src/rfb.c src/util.c src/d3des.c src/logind.c src/log.c src/input.c src/input_state.c src/drm.c src/event_loop.c src/session.c src/fb_mngr.c src/main.c |> gcc $(CFLAGS) -c %f -o %o |> build/%B.o
+: build/*.o |> gcc %f -o %o $(LDFLAGS) |> build/vnc-viewer
 .gitignore

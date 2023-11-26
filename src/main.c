@@ -28,8 +28,6 @@ int main(int argc, char **argv)
 
 	vnc_log_init("/tmp/vnc-client.log");
 
-	// vnc_input_debug(&vnc_input);
-
 	bool ok = vnc_event_loop_init(&event_loop);
 	if (!ok) {
 		vnc_log_error("Unable to initialize event loop");
@@ -50,8 +48,7 @@ int main(int argc, char **argv)
 		vnc_log_error("vnc_session_init failed");
 		return 1;
 	}
-	// ok = vnc_session_connect(&vnc_session, "127.0.0.1", 5901);
-	ok = vnc_session_connect(&vnc_session, "192.168.1.19", 5901);
+	ok = vnc_session_connect(&vnc_session, "127.0.0.1", 5901);
 	if (!ok) {
 		vnc_log_error("vnc_session_connect failed");
 		return 1;
@@ -141,10 +138,7 @@ int main(int argc, char **argv)
 							    server_settings.height);
 		}
 		if ((events & VNC_EVENT_TYPE_LIBINPUT) > 0) {
-			if (vnc_input_handle_events(&vnc_input, &input_state.callbacks)) {
-				vnc_log_debug("Got keystroke, exiting");
-				break;
-			}
+			vnc_input_handle_events(&vnc_input, &input_state.callbacks);
 
 			if (input_state.wheel_scrolls == 0) {
 				vnc_session_send_pointer_event(&vnc_session, &input_state);
