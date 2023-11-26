@@ -24,6 +24,8 @@ static bool set_event(struct Vnc_session *session, enum Vnc_session_event event)
 static bool handle_fence(struct Vnc_session *session);
 static enum Vnc_rfb_result handle_rect(struct Vnc_rfb_framebuffer_update_action *action,
 				       struct Vnc_rfb_rect *rect);
+static u8 pointer_toggle_wheel_scroll_button_mask(
+	u8 button_mask, enum Vnc_input_state_wheel_scroll_direction scroll_direction);
 
 bool vnc_session_init(struct Vnc_session *session)
 {
@@ -338,14 +340,13 @@ static void *vnc_session_thread(void *args)
 	pthread_exit(NULL);
 }
 
-bool vnc_session_send_pointer_event(struct Vnc_session *session,
-				    struct Vnc_input_state *input_state)
+bool vnc_session_send_pointer_event(struct Vnc_session *session, u16 xpos, u16 ypos, u8 button_mask)
 {
 	struct Vnc_rfb_pointer_event pointer_event = {
 		.message_type = VNC_RFB_CLIENT_MESSAGE_TYPE_POINTER_EVENT,
-		.button_mask = input_state->button_mask,
-		.xpos = htons((u16)input_state->pos.x),
-		.ypos = htons((u16)input_state->pos.y),
+		.button_mask = button_mask,
+		.xpos = htons(xpos),
+		.ypos = htons(ypos),
 	};
 	if (!vnc_rfb_pointer_event_eq(&pointer_event, &session->last_sent_pointer_event)) {
 		enum Vnc_rfb_result result =
@@ -508,4 +509,51 @@ void vnc_session_get_server_settings(struct Vnc_session *session,
 	pthread_mutex_lock(&session->event_mutex);
 	*server_settings = session->server_settings;
 	pthread_mutex_unlock(&session->event_mutex);
+}
+
+void vnc_session_post_process_mouse_input(
+	struct Vnc_session *session, u16 xpos, u16 ypos, u8 button_mask, u32 wheel_scrolls,
+	enum Vnc_input_state_wheel_scroll_direction scroll_direction)
+{
+	if (wheel_scrolls == 0) {
+		vnc_session_send_pointer_event(session, xpos, ypos, button_mask);
+	} else {
+		// We need to toggle the scroll up/down button
+		// Make sure the scroll buttons are not enabled
+		button_mask &= 0x7;
+		for (size_t i = 0; i < wheel_scrolls; ++i) {
+			button_mask = pointer_toggle_wheel_scroll_button_mask(button_mask,
+									      scroll_direction);
+			vnc_session_send_pointer_event(session, xpos, ypos, button_mask);
+			button_mask = pointer_toggle_wheel_scroll_button_mask(button_mask,
+									      scroll_direction);
+			vnc_session_send_pointer_event(session, xpos, ypos, button_mask);
+		}
+	}
+}
+
+static u8 pointer_toggle_wheel_scroll_button_mask(
+	u8 button_mask, enum Vnc_input_state_wheel_scroll_direction scroll_direction)
+{
+	static const u32 BTN_SCROLL_UP = 4;
+	static const u32 BTN_SCROLL_DOWN = 3;
+	u8 button_index = scroll_direction == VNC_INPUT_STATE_WHEEL_SCROLL_DIRECTION_UP ?
+				  BTN_SCROLL_UP :
+				  BTN_SCROLL_DOWN;
+	if ((button_mask & (1 << button_index)) > 0) {
+		button_mask &= ~(1 << button_index);
+	} else {
+		button_mask |= 1 << button_index;
+	}
+	return button_mask;
+}
+
+void vnc_session_post_process_keyboard_input(struct Vnc_session *session,
+					     struct Vnc_input_state_key_event *key_events,
+					     size_t key_event_count)
+{
+	for (size_t i = 0; i < key_event_count; ++i) {
+		struct Vnc_input_state_key_event *key_event = &key_events[i];
+		vnc_session_send_key_event(session, key_event);
+	}
 }

@@ -86,7 +86,8 @@ void vnc_input_handle_events(struct Vnc_input *vnc_input, struct Vnc_input_actio
 			enum libinput_key_state key_state =
 				libinput_event_keyboard_get_key_state(keyboard_event);
 			bool pressed = key_state == LIBINPUT_KEY_STATE_PRESSED;
-			callbacks->keyboard_key(callbacks, button, pressed);
+			u64 timestamp_usec = libinput_event_keyboard_get_time_usec(keyboard_event);
+			callbacks->keyboard_key(callbacks, button, pressed, timestamp_usec);
 			break;
 		}
 		case LIBINPUT_EVENT_POINTER_MOTION: {

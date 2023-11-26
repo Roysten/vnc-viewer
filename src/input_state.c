@@ -6,9 +6,6 @@
 #include "log.h"
 #include "macros.h"
 
-#define BTN_SCROLL_UP 4
-#define BTN_SCROLL_DOWN 3
-
 static bool map_pointer_button(u32 libinput_code, u8 *button);
 static void move_pointer(struct Vnc_input_state *input_state, double dx, double dy);
 
@@ -93,7 +90,8 @@ void vnc_input_state_pointer_wheel_scroll(struct Vnc_input_action *action, doubl
 	}
 }
 
-void vnc_input_state_keyboard_key(struct Vnc_input_action *action, u32 key, bool pressed)
+void vnc_input_state_keyboard_key(struct Vnc_input_action *action, u32 key, bool pressed,
+				  u64 timestamp_usec)
 {
 	struct Vnc_input_state *input_state =
 		container_of(action, struct Vnc_input_state, callbacks);
@@ -108,24 +106,14 @@ void vnc_input_state_keyboard_key(struct Vnc_input_action *action, u32 key, bool
 	input_state->key_events[input_state->key_event_count].keysym = keysym;
 	input_state->key_events[input_state->key_event_count].pressed = pressed;
 	input_state->key_event_count += 1;
+
+	input_state->key_repeat.keysym = pressed ? keysym : XKB_KEY_NoSymbol;
+	input_state->key_repeat.timestamp_usec = timestamp_usec;
 }
 
 void vnc_input_state_pointer_reset_wheel_scrolls(struct Vnc_input_state *input_state)
 {
 	input_state->wheel_scrolls = 0;
-}
-
-void vnc_input_state_pointer_toggle_wheel_scroll_button_mask(struct Vnc_input_state *input_state)
-{
-	u8 button_index = input_state->wheel_scroll_direction ==
-					  VNC_INPUT_STATE_WHEEL_SCROLL_DIRECTION_UP ?
-				  BTN_SCROLL_UP :
-				  BTN_SCROLL_DOWN;
-	if ((input_state->button_mask & (1 << button_index)) > 0) {
-		input_state->button_mask &= ~(1 << button_index);
-	} else {
-		input_state->button_mask |= 1 << button_index;
-	}
 }
 
 static bool map_pointer_button(u32 libinput_code, u8 *button)

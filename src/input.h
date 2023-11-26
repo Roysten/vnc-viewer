@@ -11,7 +11,8 @@ struct Vnc_input_action {
 	void (*pointer_move)(struct Vnc_input_action *action, double dx, double dy);
 	void (*pointer_button)(struct Vnc_input_action *action, u32 button, bool pressed);
 	void (*pointer_wheel_scroll)(struct Vnc_input_action *action, double scroll_value);
-	void (*keyboard_key)(struct Vnc_input_action *action, u32 key, bool pressed);
+	void (*keyboard_key)(struct Vnc_input_action *action, u32 key, bool pressed,
+			     u64 timestamp_usec);
 };
 
 struct Vnc_input {

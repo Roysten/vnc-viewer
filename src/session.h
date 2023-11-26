@@ -39,8 +39,8 @@ bool vnc_session_exchange_connection_params(struct Vnc_session *session, bool sh
 bool vnc_session_handle_message(struct Vnc_session *session);
 bool vnc_session_start_processing_continuous_updates(struct Vnc_session *session,
 						     struct Vnc_fb_mngr *fb_mngr);
-bool vnc_session_send_pointer_event(struct Vnc_session *session,
-				    struct Vnc_input_state *input_state);
+bool vnc_session_send_pointer_event(struct Vnc_session *session, u16 xpos, u16 ypos,
+				    u8 button_mask);
 bool vnc_session_send_key_event(struct Vnc_session *session,
 				struct Vnc_input_state_key_event *key_event);
 int vnc_session_get_event_fd(struct Vnc_session *session);
@@ -48,3 +48,9 @@ u32 vnc_session_get_events(struct Vnc_session *session);
 bool vnc_session_handle_fence(struct Vnc_session *session);
 void vnc_session_get_server_settings(struct Vnc_session *session,
 				     struct Vnc_rfb_server_init *server_settings);
+void vnc_session_post_process_mouse_input(
+	struct Vnc_session *session, u16 xpos, u16 ypos, u8 button_mask, u32 wheel_scrolls,
+	enum Vnc_input_state_wheel_scroll_direction scroll_direction);
+void vnc_session_post_process_keyboard_input(struct Vnc_session *session,
+					     struct Vnc_input_state_key_event *key_events,
+					     size_t key_event_count);
