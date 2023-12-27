@@ -50,7 +50,10 @@
 		size_t to_discard = size; \
 		while (to_discard > 0) { \
 			char discard_buf[8192]; \
-			ssize_t bytes_read = read(vnc_fd, discard_buf, to_discard); \
+			ssize_t bytes_read = read(vnc_fd, discard_buf, \
+						  to_discard > sizeof(discard_buf) ? \
+							  sizeof(discard_buf) : \
+							  to_discard); \
 			if (bytes_read < 0) { \
 				if (errno == EINTR) { \
 					continue; \
