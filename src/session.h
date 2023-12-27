@@ -54,3 +54,5 @@ void vnc_session_post_process_mouse_input(
 void vnc_session_post_process_keyboard_input(struct Vnc_session *session,
 					     struct Vnc_input_state_key_event *key_events,
 					     size_t key_event_count);
+void vnc_session_handle_key_repeat(struct Vnc_session *session,
+				   struct Vnc_input_state_key_event *key_events);

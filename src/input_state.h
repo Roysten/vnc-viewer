@@ -36,8 +36,9 @@ struct Vnc_input_state {
 	struct Vnc_input_state_key_event key_events[256];
 	size_t key_event_count;
 
+	int key_repeat_tfd;
 	struct {
-		u32 keysym;
+		u32 keycode;
 		u64 timestamp_usec;
 	} key_repeat;
 };
@@ -56,3 +57,8 @@ vnc_input_state_pop_keyboard_key_events(struct Vnc_input_state *input_state,
 
 void vnc_input_state_desktop_size_update(struct Vnc_input_state *input_state, double width,
 					 double height);
+
+int vnc_input_state_get_key_repeat_tfd(struct Vnc_input_state *input_state);
+void vnc_input_state_reset_key_repeat_tfd(struct Vnc_input_state *input_state);
+void vnc_input_state_get_repeat_key_event(struct Vnc_input_state *input_state,
+					  struct Vnc_input_state_key_event *key_event);

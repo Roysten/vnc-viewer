@@ -2,9 +2,12 @@
 
 #include <math.h>
 #include <linux/input-event-codes.h>
+#include <sys/timerfd.h>
 
 #include "log.h"
 #include "macros.h"
+
+enum { KEY_REPEAT_DELAY_MS = 300, KEY_REPEAT_RATE_MS = 100 };
 
 static bool map_pointer_button(u32 libinput_code, u8 *button);
 static void move_pointer(struct Vnc_input_state *input_state, double dx, double dy);
@@ -21,7 +24,7 @@ bool vnc_input_state_init(struct Vnc_input_state *input_state)
 		.rules = NULL,
 		.model = "pc105",
 		.layout = "us",
-		.variant = "",
+		.variant = "altgr-intl",
 		.options = "terminate:ctrl_alt_bksp",
 	};
 
@@ -38,6 +41,12 @@ bool vnc_input_state_init(struct Vnc_input_state *input_state)
 		return false;
 	}
 
+	int key_repeat_tfd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+	if (key_repeat_tfd == -1) {
+		vnc_log_error("timerfd_create failed");
+		return false;
+	}
+
 	*input_state = (struct Vnc_input_state) {
 		.callbacks = {
 			.pointer_move = vnc_input_state_pointer_move,
@@ -48,6 +57,7 @@ bool vnc_input_state_init(struct Vnc_input_state *input_state)
 		.xkb_context = xkb_context,
 		.xkb_keymap = xkb_keymap,
 		.xkb_state = xkb_state,
+		.key_repeat_tfd = key_repeat_tfd,
 	};
 	return true;
 }
@@ -107,8 +117,23 @@ void vnc_input_state_keyboard_key(struct Vnc_input_action *action, u32 key, bool
 	input_state->key_events[input_state->key_event_count].pressed = pressed;
 	input_state->key_event_count += 1;
 
-	input_state->key_repeat.keysym = pressed ? keysym : XKB_KEY_NoSymbol;
-	input_state->key_repeat.timestamp_usec = timestamp_usec;
+	if (xkb_keymap_key_repeats(input_state->xkb_keymap, key)) {
+		if ((pressed && input_state->key_repeat.keycode != key) ||
+		    (!pressed && input_state->key_repeat.keycode == key)) {
+			struct itimerspec ts = {
+				.it_interval = {
+					.tv_nsec = pressed ? KEY_REPEAT_RATE_MS * 1000 * 1000 : 0,
+				},
+				// Initial delay
+				.it_value = {
+					.tv_nsec = pressed ? KEY_REPEAT_DELAY_MS * 1000 * 1000 : 0,
+				}
+			};
+			timerfd_settime(input_state->key_repeat_tfd, 0, &ts, NULL);
+		}
+		input_state->key_repeat.keycode = pressed ? key : 0;
+		input_state->key_repeat.timestamp_usec = timestamp_usec;
+	}
 }
 
 void vnc_input_state_pointer_reset_wheel_scrolls(struct Vnc_input_state *input_state)
@@ -167,4 +192,26 @@ vnc_input_state_pop_keyboard_key_events(struct Vnc_input_state *input_state,
 	struct Vnc_input_state_key_event *events = input_state->key_events;
 	input_state->key_event_count = 0;
 	return events;
+}
+
+int vnc_input_state_get_key_repeat_tfd(struct Vnc_input_state *input_state)
+{
+	return input_state->key_repeat_tfd;
+}
+
+void vnc_input_state_reset_key_repeat_tfd(struct Vnc_input_state *input_state)
+{
+	u64 timer_val;
+	read(input_state->key_repeat_tfd, &timer_val, sizeof(timer_val));
+}
+
+void vnc_input_state_get_repeat_key_event(struct Vnc_input_state *input_state,
+					  struct Vnc_input_state_key_event *key_event)
+{
+	xkb_keysym_t keysym =
+		xkb_state_key_get_one_sym(input_state->xkb_state, input_state->key_repeat.keycode);
+	*key_event = (struct Vnc_input_state_key_event){
+		.keysym = keysym,
+		.pressed = true,
+	};
 }

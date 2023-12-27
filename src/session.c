@@ -258,7 +258,6 @@ bool vnc_session_handle_message(struct Vnc_session *session)
 		return false;
 	}
 
-	vnc_log_debug("got message type %d", message_type);
 	switch ((enum Vnc_rfb_server_message_type)message_type) {
 	case VNC_RFB_SERVER_MESSAGE_TYPE_FENCE:
 		return handle_fence(session);
@@ -330,7 +329,6 @@ static void *vnc_session_thread(void *args)
 {
 	struct Vnc_session_thread_args *thread_args = args;
 	for (;;) {
-		vnc_log_debug("thread loop");
 		if (!vnc_session_handle_message(thread_args->session)) {
 			vnc_log_error("vnc_session_thread encountered an error");
 			break;
@@ -556,4 +554,10 @@ void vnc_session_post_process_keyboard_input(struct Vnc_session *session,
 		struct Vnc_input_state_key_event *key_event = &key_events[i];
 		vnc_session_send_key_event(session, key_event);
 	}
+}
+
+void vnc_session_handle_key_repeat(struct Vnc_session *session,
+				   struct Vnc_input_state_key_event *key_event)
+{
+	vnc_session_send_key_event(session, key_event);
 }

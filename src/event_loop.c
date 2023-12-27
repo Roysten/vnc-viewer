@@ -9,8 +9,9 @@
 #include "types.h"
 
 #define POS_LIBINPUT 0
-#define POS_VNC 1
-#define POS_EXIT_EVENT 2
+#define POS_KEY_REPEAT 1
+#define POS_VNC 2
+#define POS_EXIT_EVENT 3
 
 bool vnc_event_loop_init(struct Vnc_event_loop *event_loop)
 {
@@ -35,6 +36,14 @@ bool vnc_event_loop_register_libinput(struct Vnc_event_loop *event_loop, int fd)
 	return true;
 }
 
+bool vnc_event_loop_register_key_repeat(struct Vnc_event_loop *event_loop, int fd)
+{
+	struct pollfd *pollfd = &event_loop->pollfds[POS_KEY_REPEAT];
+	pollfd->fd = fd;
+	pollfd->events = POLLIN;
+	return true;
+}
+
 bool vnc_event_loop_register_vnc(struct Vnc_event_loop *event_loop, int fd)
 {
 	struct pollfd *pollfd = &event_loop->pollfds[POS_VNC];
@@ -53,6 +62,9 @@ bool vnc_event_loop_process_events(struct Vnc_event_loop *event_loop, u32 *event
 		*events = 0;
 		if ((event_loop->pollfds[POS_LIBINPUT].revents & POLLIN) > 0) {
 			*events |= VNC_EVENT_TYPE_LIBINPUT;
+		}
+		if ((event_loop->pollfds[POS_KEY_REPEAT].revents & POLLIN) > 0) {
+			*events |= VNC_EVENT_TYPE_KEY_REPEAT;
 		}
 		if ((event_loop->pollfds[POS_VNC].revents & POLLIN) > 0) {
 			*events |= VNC_EVENT_TYPE_VNC;

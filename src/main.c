@@ -124,6 +124,8 @@ int main(int argc, char **argv)
 
 	vnc_event_loop_register_vnc(&event_loop, vnc_session_get_event_fd(&vnc_session));
 	vnc_event_loop_register_libinput(&event_loop, vnc_input_get_fd(&vnc_input));
+	vnc_event_loop_register_key_repeat(&event_loop,
+					   vnc_input_state_get_key_repeat_tfd(&input_state));
 
 	u32 events;
 	while ((ok = vnc_event_loop_process_events(&event_loop, &events))) {
@@ -146,13 +148,20 @@ int main(int argc, char **argv)
 							     input_state.wheel_scrolls,
 							     input_state.wheel_scroll_direction);
 			vnc_input_state_pointer_reset_wheel_scrolls(&input_state);
+
+			size_t key_event_count;
+			struct Vnc_input_state_key_event *key_events =
+				vnc_input_state_pop_keyboard_key_events(&input_state,
+									&key_event_count);
+			vnc_session_post_process_keyboard_input(&vnc_session, key_events,
+								key_event_count);
 		}
-
-		size_t key_event_count;
-		struct Vnc_input_state_key_event *key_events =
-			vnc_input_state_pop_keyboard_key_events(&input_state, &key_event_count);
-		vnc_session_post_process_keyboard_input(&vnc_session, key_events, key_event_count);
-
+		if ((events & VNC_EVENT_TYPE_KEY_REPEAT) > 0) {
+			struct Vnc_input_state_key_event key_event;
+			vnc_input_state_get_repeat_key_event(&input_state, &key_event);
+			vnc_session_handle_key_repeat(&vnc_session, &key_event);
+			vnc_input_state_reset_key_repeat_tfd(&input_state);
+		}
 		if ((events & VNC_EVENT_TYPE_EXIT) > 0) {
 			vnc_log_debug("Exit requested");
 			break;
