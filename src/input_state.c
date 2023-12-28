@@ -7,7 +7,7 @@
 #include "log.h"
 #include "macros.h"
 
-enum { KEY_REPEAT_DELAY_MS = 300, KEY_REPEAT_RATE_MS = 100 };
+enum { KEY_REPEAT_DELAY_MS = 300, KEY_REPEAT_RATE_MS = 50 };
 
 static bool map_pointer_button(u32 libinput_code, u8 *button);
 static void move_pointer(struct Vnc_input_state *input_state, double dx, double dy);
